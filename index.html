@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeSphere Pro - Learn Programming</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { margin:0; height:100vh; overflow:hidden; background:#121212; perspective:1000px; font-family:'Roboto',sans-serif; cursor:grab; }
+        body.dragging { cursor:grabbing; }
+        #scene { position:absolute; width:100%; height:100%; transform:translateX(0) translateY(0); }
+        .orb { position:absolute; width:160px; height:160px; border-radius:50%; color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; text-align:center; cursor:pointer; transition:transform 0.5s, box-shadow 0.5s; box-shadow:0 0 30px rgba(255,255,255,0.3); }
+        .orb:hover { transform:scale(1.2); box-shadow:0 0 60px rgba(255,255,255,0.8); }
+        #menu { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); display:none; flex-direction:column; align-items:center; justify-content:center; z-index:10; overflow-y:auto; }
+        #content { max-width:900px; width:90%; color:#fff; padding:30px; background:rgba(255,255,255,0.15); border-radius:15px; box-shadow:0 0 20px rgba(0,0,0,0.5); }
+        .close { position:absolute; top:20px; right:20px; font-size:40px; cursor:pointer; color:#fff; }
+        canvas { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+        pre { background:#1e1e1e; padding:15px; border-radius:8px; overflow:auto; }
+        code { font-family:monospace; color:#d4d4d4; }
+        textarea { width:100%; height:200px; background:#1e1e1e; color:#fff; font-family:monospace; padding:10px; border-radius:8px; margin:15px 0; }
+        button { padding:10px 20px; background:#007bff; color:white; border:none; border-radius:5px; cursor:pointer; font-size:16px; margin:5px; }
+        button:hover { background:#0056b3; }
+        #output { background:#1e1e1e; color:#0f0; padding:15px; border-radius:8px; min-height:100px; white-space:pre-wrap; margin:15px 0; }
+        #chat { width:100%; max-height:200px; background:#1e1e1e; color:#fff; padding:10px; overflow-y:auto; margin:10px 0; border-radius:8px; }
+        input { width:100%; padding:10px; background:#333; color:#fff; border:none; border-radius:8px; }
+    </style>
+</head>
+<body>
+    <canvas id="particles"></canvas>
+    <div id="scene"></div>
+    <div id="menu">
+        <div class="close">&times;</div>
+        <div id="content"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
+
+    <script>
+        particlesJS('particles', { particles: { number: { value: 100 }, color: { value: '#ffffff' }, shape: { type: 'circle' }, opacity: { value: 0.6 }, size: { value: 4 }, line_linked: { enable: true, distance: 120, color: '#ffffff', opacity: 0.3, width: 1 }, move: { enable: true, speed: 3 } }, interactivity: { detect_on: 'canvas', events: { onhover: { enable: true, mode: 'grab' }, onclick: { enable: true, mode: 'push' } } } });
+
+        let pyodide;
+
+        async function initPyodide() {
+            if (!pyodide) {
+                pyodide = await loadPyodide();
+                await pyodide.runPythonAsync(`import sys\nfrom io import StringIO\nsys.stdout = StringIO()\nsys.stderr = StringIO()`);
+            }
+        }
+
+        async function runCode(code) {
+            await initPyodide();
+            let stdout = pyodide.globals.get('sys').stdout;
+            let stderr = pyodide.globals.get('sys').stderr;
+            stdout.seek(0); stdout.truncate(0);
+            stderr.seek(0); stderr.truncate(0);
+            try {
+                await pyodide.runPythonAsync(code);
+            } catch (err) {
+                return "Error: " + err.message;
+            }
+            return stdout.getvalue() + stderr.getvalue();
+        }
+
+        const MODEL_ID = "microsoft/Phi-3-mini-4k-instruct";
+
+        async function askAI(question, code = "") {
+            const prompt = `You are a helpful Python tutor. User question: ${question}\nCurrent code:\n${code}\nRespond clearly and helpfully.`;
+            const response = await fetch(`https://api-inference.huggingface.co/models/${MODEL_ID}`, {
+                method: "POST",
+                headers: {
+                    "Authorization": "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",  // REPLACE WITH YOUR NEW TOKEN
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    inputs: prompt,
+                    parameters: { max_new_tokens: 200, temperature: 0.7 }
+                })
+            });
+            const data = await response.json();
+            return data[0]?.generated_text?.replace(prompt, "") || "Error: No response";
+        }
+
+        const languages = { "Python": "Practice and ask the real AI Tutor below.", /* others same */ };
+
+        // ... (orb creation same as before)
+
+        // In Python orb click handler:
+        if (isPython) {
+            // run code same
+            document.getElementById('askBtn').onclick = async () => {
+                const q = questionInput.value.trim();
+                if (!q) return;
+                chat.innerHTML += `<p><strong>You:</strong> ${q}</p><p><strong>AI Tutor:</strong> Thinking...</p>`;
+                chat.scrollTop = chat.scrollHeight;
+                const code = document.getElementById('codeInput')?.value || "";
+                const response = await askAI(q, code);
+                chat.lastChild.innerHTML = `<strong>AI Tutor:</strong> ${response}`;
+                questionInput.value = "";
+                chat.scrollTop = chat.scrollHeight;
+            };
+        }
+
+        // ... rest same
+    </script>
+</body>
+</html>
